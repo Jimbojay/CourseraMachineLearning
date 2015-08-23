@@ -1,0 +1,214 @@
+---
+title: "Coursera - Machine Learning - Course Project"
+author: "Imre Dekker"
+date: "Sunday, July 27, 2015"
+output: html_document
+---
+
+<br>
+
+# Executive summary
+
+
+# Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+
+# Data Processing
+
+##Loading of required packages
+
+```{r}
+#install.packages('rattle')
+#install.packages('rpart.plot')
+#install.packages('ElemStatLearn')
+#install.packages('pgmm')
+#install.packages('rattle')
+#install.packages('ggplot2')
+#install.packages('caret')
+#install.packages('randomForest')
+#install.packages('e1071')
+#install.packages('gbm')
+#install.packages('survival')
+#install.packages('splines')
+#install.packages('plyr')
+#install.packages('caTools')
+
+```
+
+```{r, results='hide'}
+require('knitr')
+library('rattle')
+library('rpart.plot')
+library('ElemStatLearn')
+library('pgmm')
+library('rattle')
+library('ggplot2')
+library('caret')
+library('randomForest')
+library('e1071')
+library('gbm')
+library('survival')
+library('splines')
+library('plyr')
+library('caTools')
+
+```
+##Download data
+
+```{r, results='hide'}
+if(!file.exists("./data"))
+        {dir.create("./data")}
+        
+fileTraining <- file.path(getwd(), "data/Train.csv")
+fileTest <- file.path(getwd(), "data/Test.csv")
+        
+if(!file.exists("data/Train.csv"))   
+        {fileUrlTraining = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+         download.file(fileUrlTraining, destfile=fileTraining, mode="wb")}
+         
+if(!file.exists("data/Test.csv"))   
+        {fileUrlTest = "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+         download.file(fileUrlTest, destfile=fileTest, mode="wb")}
+```
+
+## Load data
+Data is loaded and NA's are identified as such
+
+```{r}
+set.seed(12345)
+
+
+Train <- read.csv(fileTraining, na.strings=c("NA","#DIV/0!", ""), row.names = 1)
+Test <- read.csv(fileTest, na.strings=c("NA","#DIV/0!", ""), row.names = 1)
+
+dim(Train)
+dim(Test)
+
+```
+The original samples contain respectively 19622 rows and 159 columns for the trainingsample and 20 rows and 259 columns for the test sample
+
+## Tidy data
+
+### Remove columns with 95% NA's
+
+```{r}
+# List of total number of NA's in the Train sample per column
+count.NAs <- sapply(Train,function(x) sum(is.na(x)))
+
+# Identify columns with 95% NA's
+index.NAs <- c()
+for (i in 1:length(count.NAs)) {
+   if (count.NAs[[i]]/dim(Train)[1] >= 0.95)
+     {index.NAs <- append(index.NAs,i)}
+  }
+
+# Remove columns with 95% NA's
+
+Train <- Train[,-index.NAs]
+dim(Train)
+```
+This transformation discarded 100 columns from the trainingsample
+
+### Remove potential predictors with very small variation
+
+```{r}
+# Identify columns with very small variation
+NZV <- nearZeroVar(Train)
+
+# Remove columns with very small variation
+Train <- Train[-NZV]
+dim(Train)
+
+```
+This transformation discarded another one column from the trainingsample. 
+
+The remainder of the trainingsample used for testing the different prediction models now contain 19622 rows and 58 columns.
+
+
+### Factorize the classe variable
+
+```{r, results='hide'}
+Train$classe = factor(Train$classe)
+
+```
+
+## Create a Sub-Training, Sub-Validation sample
+
+Considering the large trainingsample of 19622 it is justified to make a sub-traning and sub-validation sample from the original training dataset.
+
+```{r}
+sub <- createDataPartition(y=Train$classe, p=0.75, list=FALSE)
+subTrain <- Train[sub, ] 
+subVal <- Train[-sub, ]
+dim(subTrain)
+dim(subVal)
+
+```
+
+The original trainingsample is now split into a sub-training sample of 14718 rows and 58 columns and a sub-testing sample of 4904 rows and 58 columns.
+
+# Prediction models
+
+## Random forest
+```{r, results='hide'}
+ModelRF <- train(classe ~ . , data=subTrain, method="rf")
+PredictRF <- predict(ModelRF, subVal)
+```
+
+```{r}
+confusionMatrix(PredictRF, subVal$classe)
+```
+
+## Gradient boosted model
+
+```{r, results='hide'}
+ModelGBM <- train(classe ~ . , data=subTrain, method="gbm")
+PredictGBM <- predict(ModelGBM, subVal)
+```
+
+```{r}
+confusionMatrix(PredictGBM, subVal$classe)
+```
+
+## Linear discriminant analysis
+
+```{r, results='hide'}
+ModelLDA <- train(classe ~ . , data=subTrain, method="lda")
+PredictLDA <- predict(ModelLDA, subVal)
+```
+
+```{r}
+confusionMatrix(PredictLDA, subVal$classe)
+```
+
+
+# Conclusion
+
+The Random Forest model was chosen as the optimal model considering the hightest accuracy (99,96%). Second in line was the Gradient boosted model analysis with an accuracy of 99,71% and third the Linear discriminant with an accuracy of 84,65%.
+
+##Cross-validation
+
+The expected out of sample error taking into account the Random Forest model is the estimation that an item is misclassified. As the preditions are tested on the validation sample, the cross-validated out of sample error is therefore 1-accuracy which is 0,04%.
+
+# Submission
+
+```{r}
+# Apply Random Forest model on original testing set
+PredictSubmission <- predict(ModelRF,Test)
+
+# Write files for submission
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(PredictSubmission)
+```
+
